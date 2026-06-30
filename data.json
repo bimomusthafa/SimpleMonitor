@@ -1,0 +1,32 @@
+{
+  "patients": [
+    {
+      "id": "pat-1",
+      "name": "Bpk. Budi Santoso",
+      "room": "Mawar 01",
+      "deviceId": "Kamar-Mawar-01",
+      "createdAt": "2026-05-20T10:00:00Z"
+    },
+    {
+      "id": "pat-1782021861238",
+      "name": "bapak sapa",
+      "room": "Muani 01",
+      "deviceId": "Kamar-Muani-01",
+      "createdAt": "2026-06-21T06:04:21.240Z"
+    },
+    {
+      "id": "pat-1782021883534",
+      "name": "bapack",
+      "room": "melati 01",
+      "deviceId": "Kamar-Melati-01",
+      "createdAt": "2026-06-21T06:04:43.534Z"
+    },
+    {
+      "id": "pat-1782053261388",
+      "name": "sann",
+      "room": "Melati 01",
+      "deviceId": "Kamar-Melati-01",
+      "createdAt": "2026-06-21T14:47:41.388Z"
+    }
+  ]
+}
