@@ -9,6 +9,8 @@ interface Patient {
   name: string;
   room: string;
   deviceId: string;
+  illness?: string;
+  condition?: string;
 }
 
 export default function PatientsDashboard() {
@@ -21,12 +23,16 @@ export default function PatientsDashboard() {
   const [name, setName] = useState("");
   const [room, setRoom] = useState("");
   const [deviceId, setDeviceId] = useState("");
+  const [illness, setIllness] = useState("");
+  const [condition, setCondition] = useState("");
 
   // Edit State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRoom, setEditRoom] = useState("");
   const [editDeviceId, setEditDeviceId] = useState("");
+  const [editIllness, setEditIllness] = useState("");
+  const [editCondition, setEditCondition] = useState("");
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -51,12 +57,12 @@ export default function PatientsDashboard() {
     const res = await fetch("/api/patients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, room, deviceId })
+      body: JSON.stringify({ name, room, deviceId, illness, condition })
     });
 
     if (res.ok) {
       setIsAdding(false);
-      setName(""); setRoom(""); setDeviceId("");
+      setName(""); setRoom(""); setDeviceId(""); setIllness(""); setCondition("");
       fetchPatients();
     }
   };
@@ -73,6 +79,8 @@ export default function PatientsDashboard() {
     setEditName(p.name);
     setEditRoom(p.room);
     setEditDeviceId(p.deviceId);
+    setEditIllness(p.illness || "");
+    setEditCondition(p.condition || "");
   };
 
   const cancelEditing = () => {
@@ -80,6 +88,8 @@ export default function PatientsDashboard() {
     setEditName("");
     setEditRoom("");
     setEditDeviceId("");
+    setEditIllness("");
+    setEditCondition("");
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -89,7 +99,13 @@ export default function PatientsDashboard() {
     const res = await fetch(`/api/patients/${editingId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editName, room: editRoom, deviceId: editDeviceId })
+      body: JSON.stringify({ 
+        name: editName, 
+        room: editRoom, 
+        deviceId: editDeviceId,
+        illness: editIllness,
+        condition: editCondition
+      })
     });
 
     if (res.ok) {
@@ -115,117 +131,153 @@ export default function PatientsDashboard() {
       </div>
 
       {isAdding && (
-        <form onSubmit={handleAdd} className="bg-white p-6 rounded-3xl border border-medical-100 shadow-xl shadow-medical-100/50 mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form onSubmit={handleAdd} className="bg-white p-6 rounded-3xl border border-medical-100 shadow-xl shadow-medical-100/50 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nama Pasien</label>
-            <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none" placeholder="Cth: Bpk. Budi" />
+            <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Bpk. Budi" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nomor Kamar</label>
-            <input required value={room} onChange={e => setRoom(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none" placeholder="Cth: Melati 03" />
+            <input required value={room} onChange={e => setRoom(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Melati 03" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">ID Alat (ESP32)</label>
-            <input required value={deviceId} onChange={e => setDeviceId(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none" placeholder="Cth: ESP32-01" />
+            <input required value={deviceId} onChange={e => setDeviceId(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: ESP32-01" />
           </div>
-          <button type="submit" className="bg-medical-900 text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors">
-            <Save size={18} /> Simpan Data
-          </button>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nama Penyakit</label>
+            <input required value={illness} onChange={e => setIllness(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Demam Berdarah" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Kondisi Pasien</label>
+            <input required value={condition} onChange={e => setCondition(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Lemah, butuh pemantauan" />
+          </div>
+          <div className="flex items-end">
+            <button type="submit" className="w-full bg-medical-900 text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-sm cursor-pointer">
+              <Save size={18} /> Simpan Pasien Baru
+            </button>
+          </div>
         </form>
       )}
 
       <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-sm font-bold text-gray-500 uppercase tracking-wider">
-              <th className="p-5">Nama Pasien</th>
-              <th className="p-5">Kamar</th>
-              <th className="p-5">ID Alat Infus</th>
-              <th className="p-5 text-right">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={4} className="p-8 text-center text-gray-400 font-medium">Memuat data...</td></tr>}
-            {!loading && patients.length === 0 && (
-              <tr><td colSpan={4} className="p-12 text-center text-gray-400 font-medium text-lg">Belum ada pasien yang dipantau</td></tr>
-            )}
-            {!loading && patients.map(p => {
-              const isEditing = editingId === p.id;
-              return (
-                <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  {isEditing ? (
-                    <>
-                      <td className="p-4">
-                        <input 
-                          type="text" 
-                          value={editName} 
-                          onChange={e => setEditName(e.target.value)} 
-                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-bold text-gray-900"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <input 
-                          type="text" 
-                          value={editRoom} 
-                          onChange={e => setEditRoom(e.target.value)} 
-                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-medium text-gray-500"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <input 
-                          type="text" 
-                          value={editDeviceId} 
-                          onChange={e => setEditDeviceId(e.target.value)} 
-                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-bold text-medical-800"
-                        />
-                      </td>
-                      <td className="p-4 text-right space-x-1">
-                        <button 
-                          onClick={handleEdit}
-                          className="text-medical-600 hover:text-medical-800 hover:bg-medical-50 p-2 rounded-lg transition-colors inline-flex"
-                          title="Simpan Perubahan"
-                        >
-                          <Save size={20} />
-                        </button>
-                        <button 
-                          onClick={cancelEditing}
-                          className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-colors inline-flex"
-                          title="Batal"
-                        >
-                          <X size={20} />
-                        </button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="p-5 font-bold text-gray-900">{p.name}</td>
-                      <td className="p-5 text-gray-500 font-medium">{p.room}</td>
-                      <td className="p-5">
-                        <span className="bg-medical-100 text-medical-800 px-3 py-1 rounded-full text-sm font-bold">{p.deviceId}</span>
-                      </td>
-                      <td className="p-5 text-right space-x-1">
-                        <button 
-                          onClick={() => startEditing(p)}
-                          className="text-gray-400 hover:text-medical-600 hover:bg-medical-50 p-2 rounded-lg transition-colors inline-flex"
-                          title="Edit Pasien"
-                        >
-                          <Pencil size={20} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(p.id, p.name)}
-                          className="text-gray-400 hover:text-alert-600 hover:bg-alert-50 p-2 rounded-lg transition-colors inline-flex"
-                          title="Pasien Sembuh / Hapus"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-sm font-bold text-gray-500 uppercase tracking-wider">
+                <th className="p-5">Nama Pasien</th>
+                <th className="p-5">Kamar</th>
+                <th className="p-5">Penyakit</th>
+                <th className="p-5">Kondisi</th>
+                <th className="p-5">ID Alat Infus</th>
+                <th className="p-5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={6} className="p-8 text-center text-gray-400 font-medium">Memuat data...</td></tr>}
+              {!loading && patients.length === 0 && (
+                <tr><td colSpan={6} className="p-12 text-center text-gray-400 font-medium text-lg">Belum ada pasien yang dipantau</td></tr>
+              )}
+              {!loading && patients.map(p => {
+                const isEditing = editingId === p.id;
+                return (
+                  <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    {isEditing ? (
+                      <>
+                        <td className="p-4">
+                          <input 
+                            type="text" 
+                            value={editName} 
+                            onChange={e => setEditName(e.target.value)} 
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <input 
+                            type="text" 
+                            value={editRoom} 
+                            onChange={e => setEditRoom(e.target.value)} 
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-medium text-gray-500"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <input 
+                            type="text" 
+                            value={editIllness} 
+                            onChange={e => setEditIllness(e.target.value)} 
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-medium text-gray-700"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <input 
+                            type="text" 
+                            value={editCondition} 
+                            onChange={e => setEditCondition(e.target.value)} 
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-medium text-gray-700"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <input 
+                            type="text" 
+                            value={editDeviceId} 
+                            onChange={e => setEditDeviceId(e.target.value)} 
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm font-bold text-medical-800"
+                          />
+                        </td>
+                        <td className="p-4 text-right space-x-1">
+                          <button 
+                            onClick={handleEdit}
+                            className="text-medical-600 hover:text-medical-800 hover:bg-medical-50 p-2 rounded-lg transition-colors inline-flex"
+                            title="Simpan Perubahan"
+                          >
+                            <Save size={20} />
+                          </button>
+                          <button 
+                            onClick={cancelEditing}
+                            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-colors inline-flex"
+                            title="Batal"
+                          >
+                            <X size={20} />
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="p-5 font-bold text-gray-900">{p.name}</td>
+                        <td className="p-5 text-gray-500 font-medium">{p.room}</td>
+                        <td className="p-5 text-gray-700 font-medium">{p.illness || "-"}</td>
+                        <td className="p-5">
+                          <span className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold">
+                            {p.condition || "-"}
+                          </span>
+                        </td>
+                        <td className="p-5">
+                          <span className="bg-medical-100 text-medical-800 px-3 py-1 rounded-full text-sm font-bold">{p.deviceId}</span>
+                        </td>
+                        <td className="p-5 text-right space-x-1">
+                          <button 
+                            onClick={() => startEditing(p)}
+                            className="text-gray-400 hover:text-medical-600 hover:bg-medical-50 p-2 rounded-lg transition-colors inline-flex"
+                            title="Edit Pasien"
+                          >
+                            <Pencil size={20} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(p.id, p.name)}
+                            className="text-gray-400 hover:text-alert-600 hover:bg-alert-50 p-2 rounded-lg transition-colors inline-flex"
+                            title="Pasien Sembuh / Hapus"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

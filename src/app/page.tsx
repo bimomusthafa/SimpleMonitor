@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Header from "@/components/Header";
 import PatientCard from "@/components/PatientCard";
 import { RefreshCw, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
+import mqtt from "mqtt";
 
 interface Patient {
   id: string;
   name: string;
   room: string;
   deviceId: string;
+  illness?: string;
+  condition?: string;
+  createdAt: string;
 }
 
 interface InfusionData {
@@ -21,10 +25,23 @@ interface InfusionData {
   lastUpdated: string;
 }
 
+interface AlertData {
+  id: string;
+  patientName: string;
+  room: string;
+  percentage: number;
+  level: number;
+}
+
 export default function Home() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [ivData, setIvData] = useState<Record<string, InfusionData>>({});
   const [isFetching, setIsFetching] = useState(true);
+  const [alerts, setAlerts] = useState<AlertData[]>([]);
+
+  const clientRef = useRef<mqtt.MqttClient | null>(null);
+  const simIntervalsRef = useRef<Record<string, any>>({});
+  const simDropsCountRef = useRef<Record<string, number>>({});
 
   // Fetch patients from DB
   const fetchPatients = async () => {
@@ -32,45 +49,141 @@ export default function Home() {
       const res = await fetch("/api/patients");
       if (res.ok) setPatients(await res.json());
     } catch (e) { console.error(e); }
+    setIsFetching(false);
   };
 
-  // Fetch real-time IV data for all devices
-  const fetchInfusionData = async () => {
-    try {
-      const res = await fetch("/api/infusion");
-      if (res.ok) {
-        const json = await res.json();
-        // The API now returns a dictionary of all devices
-        setIvData(json);
-      }
-    } catch (error) {
-      console.error("Failed to fetch IV data", error);
-    } finally {
-      setIsFetching(false);
-    }
-  };
-
+  // MQTT Connection and Subscription
   useEffect(() => {
     fetchPatients();
-    fetchInfusionData();
-    const interval = setInterval(fetchInfusionData, 2000);
-    return () => clearInterval(interval);
+
+    // Connect to HiveMQ Public WebSocket broker
+    const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
+    clientRef.current = client;
+
+    client.on("connect", () => {
+      console.log("Connected to HiveMQ MQTT Broker via WebSockets");
+      client.subscribe("iv-monitor/device/+/data", (err) => {
+        if (err) {
+          console.error("MQTT Subscription failed:", err);
+        } else {
+          console.log("Subscribed to iv-monitor/device/+/data");
+        }
+      });
+    });
+
+    client.on("message", (topic, message) => {
+      try {
+        const parts = topic.split("/");
+        const deviceId = parts[2];
+        if (deviceId) {
+          const payload = JSON.parse(message.toString());
+          const flowRate = payload.flowRate || 0;
+          const dropsCount = payload.dropsCount || 0;
+          
+          let status: "normal" | "warning-fast" | "warning-slow" = "normal";
+          if (flowRate > 120) {
+            status = "warning-fast";
+          } else if (flowRate < 10) {
+            status = "warning-slow";
+          }
+
+          setIvData(prev => ({
+            ...prev,
+            [deviceId]: {
+              deviceId,
+              dropsCount,
+              flowRate,
+              status,
+              lastUpdated: new Date().toISOString()
+            }
+          }));
+        }
+      } catch (err) {
+        console.error("Error parsing MQTT message payload:", err);
+      }
+    });
+
+    return () => {
+      if (client) {
+        client.end();
+      }
+      // Clear any active simulation loops on unmount
+      Object.values(simIntervalsRef.current).forEach(clearInterval);
+    };
   }, []);
 
-  const simulateESP32Data = async (rate: number, targetDeviceId: string) => {
+  // Compute alerts dynamically
+  useEffect(() => {
+    const activeAlerts: AlertData[] = [];
+    patients.forEach(p => {
+      const data = Object.values(ivData).find(
+        d => d.deviceId.toLowerCase() === p.deviceId.toLowerCase()
+      );
+      if (data) {
+        const remainingVolume = Math.max(0, 1000 - (data.dropsCount / 20));
+        const pct = (remainingVolume / 1000) * 100;
+        
+        let threshold = 100;
+        if (pct <= 15) {
+          threshold = 15;
+        } else if (pct <= 20) {
+          threshold = 20;
+        } else if (pct <= 25) {
+          threshold = 25;
+        } else if (pct <= 30) {
+          threshold = 30;
+        }
+        
+        if (threshold <= 30) {
+          activeAlerts.push({
+            id: p.id,
+            patientName: p.name,
+            room: p.room,
+            percentage: Math.round(pct),
+            level: threshold
+          });
+        }
+      }
+    });
+    setAlerts(activeAlerts);
+  }, [patients, ivData]);
+
+  // Simulate ESP32 telemetry by publishing simulated values directly to HiveMQ MQTT Broker
+  const simulateESP32Data = (rate: number, targetDeviceId: string) => {
+    if (simIntervalsRef.current[targetDeviceId]) {
+      clearInterval(simIntervalsRef.current[targetDeviceId]);
+    }
+
     const currentDeviceData = Object.values(ivData).find(
       d => d.deviceId.toLowerCase() === targetDeviceId.toLowerCase()
     );
-    await fetch("/api/infusion", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        deviceId: targetDeviceId,
-        flowRate: rate,
-        dropsCount: (currentDeviceData?.dropsCount || 1540) + Math.floor(Math.random() * 5),
-      })
-    });
-    fetchInfusionData(); 
+    let currentDrops = currentDeviceData?.dropsCount || 1000;
+    simDropsCountRef.current[targetDeviceId] = currentDrops;
+
+    const interval = setInterval(() => {
+      if (clientRef.current && clientRef.current.connected) {
+        let addedDrops = Math.round((rate / 60) * 2);
+        
+        // Demo acceleration: speed up drop accumulation in warning mode so volume drains visibly
+        if (rate > 120) {
+          addedDrops = addedDrops * 25;
+        }
+
+        simDropsCountRef.current[targetDeviceId] += addedDrops;
+
+        const payload = {
+          flowRate: rate,
+          dropsCount: simDropsCountRef.current[targetDeviceId]
+        };
+
+        clientRef.current.publish(
+          `iv-monitor/device/${targetDeviceId}/data`,
+          JSON.stringify(payload)
+        );
+      }
+    }, 2000);
+
+    simIntervalsRef.current[targetDeviceId] = interval;
   };
 
   return (
@@ -90,6 +203,48 @@ export default function Home() {
              </Link>
           </div>
         </div>
+
+        {/* Real-time Infusion Alert Center */}
+        {alerts.length > 0 && (
+          <div className="mb-8 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-[24px] p-6 shadow-md shadow-red-100/30 animate-pulse">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="flex h-3.5 w-3.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500"></span>
+              </span>
+              <h3 className="text-sm font-black text-red-800 uppercase tracking-wider">
+                Pusat Peringatan Sisa Cairan Infus ({alerts.length} Pasien)
+              </h3>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {alerts.map(alert => {
+                const isCritical = alert.percentage <= 15;
+                const badgeColor = isCritical 
+                  ? "bg-red-100 text-red-800 border-red-200" 
+                  : "bg-orange-100 text-orange-800 border-orange-200";
+                
+                return (
+                  <div key={alert.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-start gap-3">
+                    <div className="text-xl mt-0.5">⚠️</div>
+                    <div>
+                      <div className="font-bold text-gray-800 text-sm">{alert.patientName}</div>
+                      <div className="text-xs text-gray-500 font-medium">Kamar: {alert.room}</div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeColor}`}>
+                          Sisa: {alert.percentage}%
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-bold">
+                          ({alert.percentage * 10} mL)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {patients.length === 0 && !isFetching && (
           <div className="bg-white rounded-3xl border border-dashed border-gray-300 p-12 text-center text-gray-500">
@@ -114,6 +269,9 @@ export default function Home() {
                      flowRate={data.flowRate}
                      dropsCount={data.dropsCount}
                      status={data.status}
+                     illness={p.illness}
+                     condition={p.condition}
+                     createdAt={p.createdAt}
                    />
                  ) : (
                    <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 p-8 flex flex-col items-center justify-center text-gray-400 h-[280px]">

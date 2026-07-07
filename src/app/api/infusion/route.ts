@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 // In-memory store for prototype purposes.
 // In a real app, this would be a database like PostgreSQL or InfluxDB.
@@ -15,35 +15,26 @@ let infusionsStore: Record<string, InfusionData> = {};
 
 export async function GET() {
   try {
-    const db = await getDb();
+    const patients = await prisma.patient.findMany();
     const now = new Date();
     
     // Auto-simulate data for all registered patients if no active ESP32 is posting
-    for (const patient of db.patients) {
+    for (const patient of patients) {
       const deviceId = patient.deviceId;
       if (!deviceId) continue;
       
       const prev = infusionsStore[deviceId];
       
-      // If no data exists, or data is older than 6 seconds (meaning ESP32 is offline)
-      if (!prev || (now.getTime() - new Date(prev.lastUpdated).getTime() > 6000)) {
-        const prevDrops = prev ? prev.dropsCount : (Math.floor(Math.random() * 1000) + 500);
-        let flowRate = prev ? prev.flowRate : 0;
-        
-        if (!prev) {
-          // Initialize random flow rate
-          const rand = Math.random();
-          if (rand < 0.7) {
-            flowRate = Math.floor(Math.random() * 20) + 55; // 55-75 (normal)
-          } else if (rand < 0.85) {
-            flowRate = Math.floor(Math.random() * 20) + 125; // 125-145 (fast)
-          } else {
-            flowRate = Math.floor(Math.random() * 5) + 3; // 3-8 (slow)
-          }
+      if (!prev) {
+        // Initialize new simulated device data
+        const rand = Math.random();
+        let flowRate = 60;
+        if (rand < 0.7) {
+          flowRate = Math.floor(Math.random() * 20) + 55; // 55-75 (normal)
+        } else if (rand < 0.85) {
+          flowRate = Math.floor(Math.random() * 20) + 125; // 125-145 (fast)
         } else {
-          // Small fluctuations
-          flowRate = flowRate + Math.floor(Math.random() * 5) - 2;
-          if (flowRate < 0) flowRate = 0;
+          flowRate = Math.floor(Math.random() * 5) + 3; // 3-8 (slow)
         }
         
         let status: "normal" | "warning-fast" | "warning-slow" = "normal";
@@ -52,13 +43,48 @@ export async function GET() {
         } else if (flowRate < 10) {
           status = "warning-slow";
         }
+
+        // Start with a small amount of drops (e.g. 500-1500)
+        const initialDrops = Math.floor(Math.random() * 1000) + 500;
+
+        infusionsStore[deviceId] = {
+          deviceId: deviceId,
+          dropsCount: initialDrops,
+          flowRate: flowRate,
+          status: status,
+          lastUpdated: now.toISOString()
+        };
+      } else {
+        // Device already exists. Accumulate drops based on elapsed time.
+        const prevTime = new Date(prev.lastUpdated).getTime();
+        const elapsedSeconds = Math.max(0, (now.getTime() - prevTime) / 1000);
         
-        // Accumulate drops based on flow rate (every 2 seconds)
-        const addedDrops = Math.max(0, Math.round((flowRate / 60) * 2));
+        // Small fluctuation in flow rate (+/- 1) to make it look alive
+        let flowRate = prev.flowRate;
+        if (flowRate > 0) {
+          flowRate = flowRate + Math.floor(Math.random() * 3) - 1;
+          if (flowRate < 0) flowRate = 0;
+        }
+
+        let status: "normal" | "warning-fast" | "warning-slow" = "normal";
+        if (flowRate > 120) {
+          status = "warning-fast";
+        } else if (flowRate < 10) {
+          status = "warning-slow";
+        }
+
+        // 20 drops = 1 mL
+        // Added drops = (flowRate / 60) * elapsedSeconds
+        let addedDrops = Math.round((flowRate / 60) * elapsedSeconds);
+        
+        // Demo acceleration: speed up drop accumulation in warning-fast mode so volume drains visibly
+        if (flowRate > 120) {
+          addedDrops = addedDrops * 25;
+        }
         
         infusionsStore[deviceId] = {
           deviceId: deviceId,
-          dropsCount: prevDrops + (addedDrops || 1),
+          dropsCount: prev.dropsCount + addedDrops,
           flowRate: flowRate,
           status: status,
           lastUpdated: now.toISOString()
