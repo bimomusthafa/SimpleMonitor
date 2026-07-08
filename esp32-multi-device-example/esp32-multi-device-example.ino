@@ -40,6 +40,15 @@ const unsigned long intervalTelegram = 1500;
 
 String statusSebelumnya = "AMAN";
 
+// Flags untuk mendeteksi notifikasi berat agar tidak kirim berulang-ulang
+bool notified_250 = false;
+bool notified_150 = false;
+bool notified_100 = false;
+bool notified_50 = false;
+bool notified_10 = false;
+bool notified_5 = false;
+bool notified_0 = false;
+
 // ================= LCD I2C =================
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -218,31 +227,78 @@ void cekTelegram() {
 
 // ================= CEK PERUBAHAN STATUS =================
 void cekNotifikasiStatus() {
-  if (statusCairan != statusSebelumnya) {
-    statusSebelumnya = statusCairan;
+  // Reset flags jika botol infus diganti/diisi ulang (berat naik di atas threshold)
+  if (beratGram > 250.0) {
+    notified_250 = false;
+    notified_150 = false;
+    notified_100 = false;
+    notified_50 = false;
+    notified_10 = false;
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 150.0) {
+    notified_150 = false;
+    notified_100 = false;
+    notified_50 = false;
+    notified_10 = false;
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 100.0) {
+    notified_100 = false;
+    notified_50 = false;
+    notified_10 = false;
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 50.0) {
+    notified_50 = false;
+    notified_10 = false;
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 10.0) {
+    notified_10 = false;
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 5.0) {
+    notified_5 = false;
+    notified_0 = false;
+  }
+  else if (beratGram > 0.0) {
+    notified_0 = false;
+  }
 
-    String pesan = "";
-
-    if (statusCairan == "KURANG") {
-      pesan += "PERINGATAN INFUS\n";
-      pesan += "Status cairan berubah menjadi KURANG.\n\n";
-      pesan += buatPesanStatus();
-      kirimTelegram(pesan);
-    }
-
-    else if (statusCairan == "HABIS") {
-      pesan += "PERINGATAN INFUS DARURAT\n";
-      pesan += "Status cairan berubah menjadi HABIS.\n\n";
-      pesan += buatPesanStatus();
-      kirimTelegram(pesan);
-    }
-
-    else if (statusCairan == "AMAN") {
-      pesan += "INFO SISTEM INFUS\n";
-      pesan += "Status cairan kembali AMAN.\n\n";
-      pesan += buatPesanStatus();
-      kirimTelegram(pesan);
-    }
+  // Kirim notifikasi jika berat turun melewati batas
+  if (beratGram <= 0.0 && !notified_0) {
+    notified_0 = true;
+    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus habis total! (0 gram)\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 5.0 && beratGram > 0.0 && !notified_5) {
+    notified_5 = true;
+    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus kritis tersisa 5 gram!\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 10.0 && beratGram > 5.0 && !notified_10) {
+    notified_10 = true;
+    kirimTelegram("⚠️ PERINGATAN KRITIS: Cairan infus tersisa 10 gram!\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 50.0 && beratGram > 10.0 && !notified_50) {
+    notified_50 = true;
+    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 50 gram!\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 100.0 && beratGram > 50.0 && !notified_100) {
+    notified_100 = true;
+    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 100 gram!\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 150.0 && beratGram > 100.0 && !notified_150) {
+    notified_150 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 150 gram.\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 250.0 && beratGram > 150.0 && !notified_250) {
+    notified_250 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 250 gram.\n\n" + buatPesanStatus());
   }
 }
 
