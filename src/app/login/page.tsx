@@ -66,7 +66,7 @@ export default function LoginPage() {
                 type="text" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-medical-500 focus:border-medical-500 transition-colors"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-medical-500 focus:border-medical-500 transition-colors text-gray-900"
                 placeholder="Masukkan username"
                 required
               />
@@ -83,7 +83,7 @@ export default function LoginPage() {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-medical-500 focus:border-medical-500 transition-colors"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-medical-500 focus:border-medical-500 transition-colors text-gray-900"
                 placeholder="••••••••"
                 required
               />

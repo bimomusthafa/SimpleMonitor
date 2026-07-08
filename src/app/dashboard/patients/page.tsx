@@ -134,23 +134,23 @@ export default function PatientsDashboard() {
         <form onSubmit={handleAdd} className="bg-white p-6 rounded-3xl border border-medical-100 shadow-xl shadow-medical-100/50 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nama Pasien</label>
-            <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Bpk. Budi" />
+            <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm text-gray-900" placeholder="Cth: Bpk. Budi" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nomor Kamar</label>
-            <input required value={room} onChange={e => setRoom(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Melati 03" />
+            <input required value={room} onChange={e => setRoom(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm text-gray-900" placeholder="Cth: Melati 03" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">ID Alat (ESP32)</label>
-            <input required value={deviceId} onChange={e => setDeviceId(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: ESP32-01" />
+            <input required value={deviceId} onChange={e => setDeviceId(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm text-gray-900" placeholder="Cth: ESP32-01" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nama Penyakit</label>
-            <input required value={illness} onChange={e => setIllness(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Demam Berdarah" />
+            <input required value={illness} onChange={e => setIllness(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm text-gray-900" placeholder="Cth: Demam Berdarah" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Kondisi Pasien</label>
-            <input required value={condition} onChange={e => setCondition(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm" placeholder="Cth: Lemah, butuh pemantauan" />
+            <input required value={condition} onChange={e => setCondition(e.target.value)} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-medical-500 outline-none text-sm text-gray-900" placeholder="Cth: Lemah, butuh pemantauan" />
           </div>
           <div className="flex items-end">
             <button type="submit" className="w-full bg-medical-900 text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-sm cursor-pointer">
