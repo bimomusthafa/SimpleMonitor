@@ -423,19 +423,19 @@ void setup() {
   // AKTIFKAN SEKALI SAJA UNTUK SET WAKTU
   // SETELAH JAM BENAR, KOMENTARI LAGI BAGIAN INI
 
-  /*
+  // --- PENTING: Upload program ini SEKALI untuk men-set waktu RTC DS1302 ---
+  // Setelah jam di LCD benar, beri tanda komentar kembali (/* ... */) bagian ini dan upload ulang!
   Ds1302::DateTime dt = {
     .year = 26,
-    .month = Ds1302::MONTH_JUN,
-    .day = 16,
-    .hour = 3,
-    .minute = 0,
+    .month = Ds1302::MONTH_JUL,
+    .day = 9,
+    .hour = 4,
+    .minute = 4,
     .second = 0,
-    .dow = Ds1302::DOW_TUE
+    .dow = Ds1302::DOW_THU
   };
 
   rtc.setDateTime(&dt);
-  */
 
   // HX711
   scale.begin(HX711_DT, HX711_SCK);
