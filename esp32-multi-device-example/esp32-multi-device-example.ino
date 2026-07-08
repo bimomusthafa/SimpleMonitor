@@ -1,93 +1,564 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Ds1302.h>
+#include "HX711.h"
+
+// ================= WIFI MANAGER & TELEGRAM =================
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h> // Library wajib diinstal melalui Library Manager di Arduino IDE
+#include <WiFiClientSecure.h>
+#include <WiFiManager.h>
+#include <UniversalTelegramBot.h>
 
-// Kredensial WiFi (GANTI DENGAN WI-FI ANDA)
-const char* ssid = "Home";
-const char* password = "admin#1234";
+// ================= MQTT CONFIGURATION =================
+#include <PubSubClient.h> // Pastikan library PubSubClient terinstal di Arduino IDE Anda
 
-// URL API Next.js (IP Laptop/PC Anda: 192.168.1.10)
-const char* serverName = "http://192.168.1.10:3000/api/infusion"; 
+#define MQTT_SERVER "broker.hivemq.com"
+#define MQTT_PORT 1883
+// GANTI MQTT_DEVICE_ID & MQTT_TOPIC sesuai dengan ID Alat yang didaftarkan di Web Dashboard Admin Next.js
+#define MQTT_DEVICE_ID "ESP32-01" 
+#define MQTT_TOPIC "iv-monitor/device/ESP32-01/data"
 
-// Data simulasi tetesan infus untuk 3 pasien berbeda yang dipantau oleh 1 ESP32
-int dropsCount1 = 1500;
-int dropsCount2 = 800;
-int dropsCount3 = 2400;
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
 
-void setup() {
-  Serial.begin(115200);
-  
-  // Koneksi ke WiFi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+unsigned long lastMQTTPublish = 0;
+const unsigned long intervalMQTTPublish = 2000; // Kirim telemetry ke web setiap 2 detik
+
+// GANTI DENGAN TOKEN BOT DARI BOTFATHER
+#define BOT_TOKEN "8549329351:AAHmDvqhD7KjaLFTKbi9Zjw_Sj-68ux70mQ"
+
+// GANTI DENGAN CHAT ID TELEGRAM ANDA
+#define ADMIN_CHAT_ID "1402014125"
+
+WiFiClientSecure secured_client;
+UniversalTelegramBot bot(BOT_TOKEN, secured_client);
+WiFiManager wm;
+
+unsigned long lastTelegram = 0;
+const unsigned long intervalTelegram = 1500;
+
+String statusSebelumnya = "AMAN";
+
+// ================= LCD I2C =================
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// ================= RTC DS1302 =================
+#define RTC_RST 5
+#define RTC_CLK 18
+#define RTC_DAT 19
+
+Ds1302 rtc(RTC_RST, RTC_CLK, RTC_DAT);
+
+// ================= HX711 =================
+#define HX711_DT 32
+#define HX711_SCK 33
+
+HX711 scale;
+
+// GANTI NILAI INI SETELAH KALIBRASI LOAD CELL
+float calibration_factor = -7050.0;
+
+float beratGram = 0;
+
+// ================= OPTOCOUPLER =================
+#define OPTO_PIN 34
+
+volatile unsigned long jumlahTetes = 0;
+volatile unsigned long totalTetesKumulatif = 0; // Menghitung total tetesan kumulatif untuk sisa infus di web
+volatile unsigned long lastDropTime = 0;
+
+// Anti dobel hitung tetesan
+const unsigned long debounceDrop = 120; // ms
+
+// Hitung tetesan setiap 30 detik
+const unsigned long intervalHitung = 30000;
+
+unsigned long lastHitung = 0;
+unsigned long lastLCD = 0;
+unsigned long lastSerial = 0;
+
+int tetes30Detik = 0;
+int tetesPerMenit = 0;
+float mlPerJam = 0;
+
+// Drop factor infus
+// Makro biasanya 20 tetes/mL
+// Mikro biasanya 60 tetes/mL
+float dropFactor = 20.0;
+
+// ================= LED WARNING =================
+#define LED_MERAH 25
+#define LED_HIJAU 26
+
+// Batas berat cairan
+float batasKurang = 100.0; // gram
+float batasHabis = 30.0;   // gram
+
+String statusCairan = "AMAN";
+
+unsigned long lastBlink = 0;
+bool redBlinkState = false;
+
+// Untuk ganti tampilan LCD
+bool tampilanUtama = true;
+unsigned long lastGantiTampilan = 0;
+
+// ================= INTERRUPT TETESAN =================
+void IRAM_ATTR hitungTetes() {
+  unsigned long now = millis();
+
+  if (now - lastDropTime > debounceDrop) {
+    jumlahTetes++;
+    totalTetesKumulatif++; // Akumulasikan ke hitungan kumulatif
+    lastDropTime = now;
   }
-  Serial.println("\nConnected to WiFi!");
 }
 
-void loop() {
+// ================= KIRIM TELEGRAM =================
+void kirimTelegram(String pesan) {
   if (WiFi.status() == WL_CONNECTED) {
-    WiFiClient client;
-    HTTPClient http;
-    
-    // Inisialisasi koneksi
-    http.begin(client, serverName);
-    http.addHeader("Content-Type", "application/json");
-    
-    // Simulasi sensor tetesan infus bertambah
-    dropsCount1 += random(1, 4);
-    dropsCount2 += random(2, 5);
-    dropsCount3 += random(1, 3);
-    
-    // Simulasi flowRate (tetes per menit)
-    int flowRate1 = random(55, 75);   // Normal
-    int flowRate2 = random(125, 140);  // Bahaya (Terlalu Cepat)
-    int flowRate3 = random(5, 8);      // Bahaya (Tersumbat / Habis)
-    
-    // Membuat Array JSON untuk mengirim data 3 alat sekaligus dalam 1 request
-    DynamicJsonDocument doc(1024);
-    JsonArray array = doc.to<JsonArray>();
-    
-    // Objek Alat 1 (Mawar 01)
-    JsonObject device1 = array.createNestedObject();
-    device1["deviceId"] = "Kamar-Mawar-01"; // Harus sesuai yang terdaftar di admin
-    device1["flowRate"] = flowRate1;
-    device1["dropsCount"] = dropsCount1;
-    
-    // Objek Alat 2 (Muani 01)
-    JsonObject device2 = array.createNestedObject();
-    device2["deviceId"] = "Kamar-Muani-01"; // Harus sesuai yang terdaftar di admin
-    device2["flowRate"] = flowRate2;
-    device2["dropsCount"] = dropsCount2;
-
-    // Objek Alat 3 (Melati 01)
-    JsonObject device3 = array.createNestedObject();
-    device3["deviceId"] = "Kamar-Melati-01"; // Harus sesuai dengan yang didaftarkan di admin
-    device3["flowRate"] = flowRate3;
-    device3["dropsCount"] = dropsCount3;
-    
-    String requestBody;
-    serializeJson(doc, requestBody);
-    
-    // Mengirim HTTP POST berupa array JSON
-    int httpResponseCode = http.POST(requestBody);
-    
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.print("HTTP Response Code: ");
-      Serial.println(httpResponseCode);
-      Serial.println(response);
-    } else {
-      Serial.print("Error sending POST: ");
-      Serial.println(httpResponseCode);
-    }
-    
-    http.end();
-  } else {
-    Serial.println("WiFi Disconnected");
+    bot.sendMessage(ADMIN_CHAT_ID, pesan, "");
   }
-  
-  delay(2000); // Kirim data berkala setiap 2 detik
+}
+
+// ================= FORMAT STATUS TELEGRAM =================
+String buatPesanStatus() {
+  noInterrupts();
+  unsigned long tetesSekarang = totalTetesKumulatif; // Tampilkan total kumulatif di Telegram
+  interrupts();
+
+  Ds1302::DateTime now;
+  rtc.getDateTime(&now);
+
+  char tanggal[17];
+  char jam[17];
+
+  sprintf(tanggal, "%02d/%02d/20%02d", now.day, now.month, now.year);
+  sprintf(jam, "%02d:%02d:%02d WIB", now.hour, now.minute, now.second);
+
+  String pesan = "";
+  pesan += "STATUS SISTEM INFUS\n";
+  pesan += "Tanggal: " + String(tanggal) + "\n";
+  pesan += "Jam: " + String(jam) + "\n\n";
+
+  pesan += "Berat Cairan: " + String(beratGram, 0) + " gram\n";
+  pesan += "Hitungan Berjalan: " + String(tetesSekarang) + " tetes\n";
+  pesan += "Tetes / Menit: " + String(tetesPerMenit) + " tetes/menit\n";
+  pesan += "Flow Infus: " + String(mlPerJam, 0) + " mL/jam\n";
+  pesan += "Status Cairan: " + statusCairan + "\n\n";
+
+  if (statusCairan == "AMAN") {
+    pesan += "Kondisi cairan masih aman.";
+  } else if (statusCairan == "KURANG") {
+    pesan += "Peringatan: cairan mulai berkurang.";
+  } else if (statusCairan == "HABIS") {
+    pesan += "Peringatan: cairan hampir habis atau sudah habis.";
+  }
+
+  return pesan;
+}
+
+// ================= HANDLE PESAN TELEGRAM =================
+void handlePesanTelegram(int jumlahPesanBaru) {
+  for (int i = 0; i < jumlahPesanBaru; i++) {
+    String chat_id = bot.messages[i].chat_id;
+    String text = bot.messages[i].text;
+    String nama = bot.messages[i].from_name;
+
+    Serial.print("Pesan Telegram dari Chat ID: ");
+    Serial.println(chat_id);
+
+    if (text == "/start") {
+      String pesan = "";
+      pesan += "Assalamu'alaikum, " + nama + ".\n";
+      pesan += "Bot monitoring infus sudah aktif.\n\n";
+      pesan += "Perintah yang tersedia:\n";
+      pesan += "/status - Melihat kondisi infus\n";
+      pesan += "/help - Bantuan perintah\n\n";
+      pesan += "Chat ID Anda:\n";
+      pesan += chat_id;
+
+      bot.sendMessage(chat_id, pesan, "");
+    }
+
+    else if (text == "/status") {
+      bot.sendMessage(chat_id, buatPesanStatus(), "");
+    }
+
+    else if (text == "/help") {
+      String pesan = "";
+      pesan += "DAFTAR PERINTAH BOT INFUS\n\n";
+      pesan += "/start - Memulai bot\n";
+      pesan += "/status - Melihat berat cairan, tetesan, flow, dan status cairan\n";
+      pesan += "/help - Melihat bantuan";
+
+      bot.sendMessage(chat_id, pesan, "");
+    }
+
+    else {
+      bot.sendMessage(chat_id, "Perintah tidak dikenal. Ketik /help untuk melihat daftar perintah.", "");
+    }
+  }
+}
+
+// ================= CEK TELEGRAM =================
+void cekTelegram() {
+  if (millis() - lastTelegram >= intervalTelegram) {
+    lastTelegram = millis();
+
+    int jumlahPesanBaru = bot.getUpdates(bot.last_message_received + 1);
+
+    while (jumlahPesanBaru) {
+      handlePesanTelegram(jumlahPesanBaru);
+      jumlahPesanBaru = bot.getUpdates(bot.last_message_received + 1);
+    }
+  }
+}
+
+// ================= CEK PERUBAHAN STATUS =================
+void cekNotifikasiStatus() {
+  if (statusCairan != statusSebelumnya) {
+    statusSebelumnya = statusCairan;
+
+    String pesan = "";
+
+    if (statusCairan == "KURANG") {
+      pesan += "PERINGATAN INFUS\n";
+      pesan += "Status cairan berubah menjadi KURANG.\n\n";
+      pesan += buatPesanStatus();
+      kirimTelegram(pesan);
+    }
+
+    else if (statusCairan == "HABIS") {
+      pesan += "PERINGATAN INFUS DARURAT\n";
+      pesan += "Status cairan berubah menjadi HABIS.\n\n";
+      pesan += buatPesanStatus();
+      kirimTelegram(pesan);
+    }
+
+    else if (statusCairan == "AMAN") {
+      pesan += "INFO SISTEM INFUS\n";
+      pesan += "Status cairan kembali AMAN.\n\n";
+      pesan += buatPesanStatus();
+      kirimTelegram(pesan);
+    }
+  }
+}
+
+// ================= UPDATE LED =================
+void updateLedWarning() {
+  if (beratGram <= batasHabis) {
+    // Cairan habis
+    statusCairan = "HABIS";
+
+    digitalWrite(LED_HIJAU, LOW);
+    digitalWrite(LED_MERAH, HIGH);
+  } 
+  else if (beratGram <= batasKurang) {
+    // Cairan kurang
+    statusCairan = "KURANG";
+
+    digitalWrite(LED_HIJAU, LOW);
+
+    // LED merah kedip
+    if (millis() - lastBlink >= 500) {
+      lastBlink = millis();
+      redBlinkState = !redBlinkState;
+      digitalWrite(LED_MERAH, redBlinkState);
+    }
+  } 
+  else {
+    // Cairan aman
+    statusCairan = "AMAN";
+
+    digitalWrite(LED_MERAH, LOW);
+    digitalWrite(LED_HIJAU, HIGH);
+  }
+}
+
+// ================= KONEKSI & REKONEKSI MQTT =================
+void reconnectMQTT() {
+  while (!mqttClient.connected()) {
+    Serial.print("Menghubungkan ke MQTT Broker...");
+    // Hubungkan dengan ClientID sesuai device ID
+    if (mqttClient.connect(MQTT_DEVICE_ID)) {
+      Serial.println("Terhubung ke MQTT Broker!");
+    } else {
+      Serial.print("Gagal terhubung, status=");
+      Serial.print(mqttClient.state());
+      Serial.println(" Mencoba kembali dalam 5 detik...");
+      delay(5000);
+    }
+  }
+}
+
+// ================= SETUP WIFI MANAGER =================
+void setupWiFiManager() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Koneksi WiFi");
+  lcd.setCursor(0, 1);
+  lcd.print("WiFiManager...");
+
+  WiFi.mode(WIFI_STA);
+
+  // Nama WiFi sementara saat ESP32 belum tersambung
+  bool berhasilKonek = wm.autoConnect("Infus Monitoring");
+
+  if (!berhasilKonek) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi Gagal");
+    lcd.setCursor(0, 1);
+    lcd.print("Restart...");
+    delay(3000);
+    ESP.restart();
+  }
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("WiFi Terhubung");
+  lcd.setCursor(0, 1);
+  lcd.print(WiFi.localIP());
+  delay(2000);
+
+  Serial.println("WiFi Terhubung");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  secured_client.setInsecure();
+
+  String salam = "";
+  salam += "Assalamu'alaikum.\n";
+  salam += "Sistem monitoring infus berhasil terhubung ke WiFi dan bot Telegram sudah aktif.\n\n";
+  salam += "Gunakan perintah /status untuk melihat kondisi infus.";
+
+  kirimTelegram(salam);
+}
+
+// ================= SETUP =================
+void setup() {
+  Serial.begin(115200);
+
+  // LCD
+  Wire.begin(21, 22);
+  lcd.init();
+  lcd.backlight();
+
+  // WiFiManager dan Telegram
+  setupWiFiManager();
+
+  // MQTT Server Setup
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+
+  // RTC
+  rtc.init();
+
+  // ================= SET WAKTU RTC =================
+  // AKTIFKAN SEKALI SAJA UNTUK SET WAKTU
+  // SETELAH JAM BENAR, KOMENTARI LAGI BAGIAN INI
+
+  /*
+  Ds1302::DateTime dt = {
+    .year = 26,
+    .month = Ds1302::MONTH_JUN,
+    .day = 16,
+    .hour = 3,
+    .minute = 0,
+    .second = 0,
+    .dow = Ds1302::DOW_TUE
+  };
+
+  rtc.setDateTime(&dt);
+  */
+
+  // HX711
+  scale.begin(HX711_DT, HX711_SCK);
+  scale.set_scale(calibration_factor);
+
+  // LED
+  pinMode(LED_MERAH, OUTPUT);
+  pinMode(LED_HIJAU, OUTPUT);
+
+  digitalWrite(LED_MERAH, LOW);
+  digitalWrite(LED_HIJAU, LOW);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Kosongkan Load");
+  lcd.setCursor(0, 1);
+  lcd.print("Cell...");
+  delay(2000);
+
+  // Tare / nol-kan load cell
+  // Pastikan gantungan/load cell belum diberi beban saat ESP32 nyala
+  scale.tare();
+
+  // Optocoupler
+  pinMode(OPTO_PIN, INPUT);
+
+  // Kalau sensor tidak ngitung, ganti FALLING jadi RISING
+  attachInterrupt(digitalPinToInterrupt(OPTO_PIN), hitungTetes, FALLING);
+
+  lastHitung = millis();
+  lastLCD = millis();
+  lastGantiTampilan = millis();
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sistem Infus");
+  lcd.setCursor(0, 1);
+  lcd.print("Mulai...");
+  delay(2000);
+  lcd.clear();
+
+  Serial.println("Sistem Infus Dimulai");
+}
+
+// ================= LOOP =================
+void loop() {
+  // ================= BACA LOAD CELL =================
+  if (scale.is_ready()) {
+    beratGram = scale.get_units(5);
+
+    if (beratGram < 0) {
+      beratGram = 0;
+    }
+  }
+
+  // ================= UPDATE LED WARNING =================
+  updateLedWarning();
+
+  // ================= NOTIFIKASI TELEGRAM JIKA STATUS BERUBAH =================
+  cekNotifikasiStatus();
+
+  // ================= CEK PESAN TELEGRAM =================
+  cekTelegram();
+
+  // ================= KONEKSI DAN PROSES MQTT =================
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!mqttClient.connected()) {
+      reconnectMQTT();
+    }
+    mqttClient.loop();
+
+    // Kirim data telemetry ke MQTT setiap 2 detik
+    if (millis() - lastMQTTPublish >= intervalMQTTPublish) {
+      lastMQTTPublish = millis();
+
+      // Format JSON Payload: {"flowRate": tetesPerMenit, "dropsCount": totalTetesKumulatif}
+      String payload = "{\"flowRate\":" + String(tetesPerMenit) + 
+                       ",\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+
+      Serial.print("Publish ke MQTT: ");
+      Serial.println(payload);
+
+      mqttClient.publish(MQTT_TOPIC, payload.c_str());
+    }
+  }
+
+  // ================= HITUNG TETES 30 DETIK =================
+  if (millis() - lastHitung >= intervalHitung) {
+    noInterrupts();
+    tetes30Detik = jumlahTetes;
+    jumlahTetes = 0; // reset hitungan mulai dari 0 lagi untuk flow rate
+    interrupts();
+
+    // Karena hitungnya 30 detik, estimasi tetes per menit dikali 2
+    tetesPerMenit = tetes30Detik * 2;
+
+    // Konversi ke mL/jam
+    mlPerJam = (tetesPerMenit * 60.0) / dropFactor;
+
+    lastHitung = millis();
+
+    Serial.println("==============================");
+    Serial.print("Tetes 30 Detik : ");
+    Serial.println(tetes30Detik);
+
+    Serial.print("Tetes / Menit  : ");
+    Serial.println(tetesPerMenit);
+
+    Serial.print("Flow Infus     : ");
+    Serial.print(mlPerJam);
+    Serial.println(" mL/jam");
+
+    Serial.print("Berat Cairan   : ");
+    Serial.print(beratGram);
+    Serial.println(" gram");
+
+    Serial.print("Status Cairan  : ");
+    Serial.println(statusCairan);
+
+    Serial.println("Hitungan tetes direset ke 0");
+  }
+
+  // ================= GANTI TAMPILAN LCD SETIAP 5 DETIK =================
+  if (millis() - lastGantiTampilan >= 5000) {
+    tampilanUtama = !tampilanUtama;
+    lastGantiTampilan = millis();
+    lcd.clear();
+  }
+
+  // ================= UPDATE LCD =================
+  if (millis() - lastLCD >= 1000) {
+    lastLCD = millis();
+
+    noInterrupts();
+    unsigned long tetesSekarang = totalTetesKumulatif; // Tampilkan total kumulatif di LCD
+    interrupts();
+
+    if (tampilanUtama) {
+      // Tampilan utama: berat dan tetesan
+      lcd.setCursor(0, 0);
+      lcd.print("B:");
+      lcd.print(beratGram, 0);
+      lcd.print("g ");
+
+      lcd.print("C:");
+      lcd.print(tetesSekarang);
+      lcd.print("   ");
+
+      lcd.setCursor(0, 1);
+      lcd.print(statusCairan);
+      lcd.print(" F:");
+      lcd.print(mlPerJam, 0);
+      lcd.print("mL/j ");
+      lcd.print("   ");
+    } else {
+      // Tampilan RTC: tanggal dan jam
+      Ds1302::DateTime now;
+      rtc.getDateTime(&now);
+
+      char tanggal[17];
+      char jam[17];
+
+      sprintf(tanggal, "%02d/%02d/20%02d", now.day, now.month, now.year);
+      sprintf(jam, "%02d:%02d:%02d WIB", now.hour, now.minute, now.second);
+
+      lcd.setCursor(0, 0);
+      lcd.print(tanggal);
+      lcd.print("   ");
+
+      lcd.setCursor(0, 1);
+      lcd.print(jam);
+      lcd.print("   ");
+    }
+  }
+
+  // ================= SERIAL MONITOR LIVE =================
+  if (millis() - lastSerial >= 1000) {
+    lastSerial = millis();
+
+    noInterrupts();
+    unsigned long tetesSekarang = totalTetesKumulatif; // Tampilkan total kumulatif di Serial
+    interrupts();
+
+    Serial.print("Hitungan berjalan: ");
+    Serial.print(tetesSekarang);
+    Serial.print(" tetes | Berat: ");
+    Serial.print(beratGram);
+    Serial.print(" gram | Status: ");
+    Serial.println(statusCairan);
+  }
 }
