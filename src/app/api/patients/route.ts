@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
-  const patients = await prisma.patient.findMany({
-    orderBy: {
-      createdAt: 'asc',
-    },
-  });
-  return NextResponse.json(patients);
+  try {
+    const patients = await prisma.patient.findMany({
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+    return NextResponse.json(patients);
+  } catch (error) {
+    console.error("Gagal mengambil data pasien dari MySQL:", error);
+    // Kembalikan array kosong agar halaman web tidak crash jika database belum di-setup
+    return NextResponse.json([]);
+  }
 }
 
 export async function POST(request: Request) {
