@@ -3,11 +3,13 @@
 #include <Ds1302.h>
 #include "HX711.h"
 
-// ================= WIFI MANAGER & TELEGRAM =================
+// ================= WIFI & TELEGRAM =================
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <WiFiManager.h>
 #include <UniversalTelegramBot.h>
+
+#define WIFI_SSID "SULTAN"
+#define WIFI_PASS "asdf2112"
 
 // ================= MQTT CONFIGURATION =================
 #include <PubSubClient.h> // Pastikan library PubSubClient terinstal di Arduino IDE Anda
@@ -32,7 +34,6 @@ const unsigned long intervalMQTTPublish = 2000; // Kirim telemetry ke web setiap
 
 WiFiClientSecure secured_client;
 UniversalTelegramBot bot(BOT_TOKEN, secured_client);
-WiFiManager wm;
 
 unsigned long lastTelegram = 0;
 const unsigned long intervalTelegram = 1500;
@@ -292,20 +293,28 @@ void reconnectMQTT() {
   }
 }
 
-// ================= SETUP WIFI MANAGER =================
-void setupWiFiManager() {
+// ================= SETUP WIFI =================
+void setupWiFi() {
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Koneksi WiFi");
+  lcd.print("Koneksi WiFi...");
   lcd.setCursor(0, 1);
-  lcd.print("WiFiManager...");
+  lcd.print(WIFI_SSID);
+
+  Serial.print("Menghubungkan ke WiFi: ");
+  Serial.println(WIFI_SSID);
 
   WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 
-  // Nama WiFi sementara saat ESP32 belum tersambung
-  bool berhasilKonek = wm.autoConnect("Infus Monitoring");
+  // Batas waktu tunggu koneksi (20 detik)
+  unsigned long startAttemptTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 20000) {
+    delay(500);
+    Serial.print(".");
+  }
 
-  if (!berhasilKonek) {
+  if (WiFi.status() != WL_CONNECTED) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Gagal");
@@ -319,10 +328,10 @@ void setupWiFiManager() {
   lcd.setCursor(0, 0);
   lcd.print("WiFi Terhubung");
   lcd.setCursor(0, 1);
-  lcd.print(WiFi.localIP());
+  lcd.print(WiFi.localIP().toString());
   delay(2000);
 
-  Serial.println("WiFi Terhubung");
+  Serial.println("\nWiFi Terhubung");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
@@ -330,7 +339,7 @@ void setupWiFiManager() {
 
   String salam = "";
   salam += "Assalamu'alaikum.\n";
-  salam += "Sistem monitoring infus berhasil terhubung ke WiFi dan bot Telegram sudah aktif.\n\n";
+  salam += "Sistem monitoring infus berhasil terhubung ke WiFi SULTAN dan bot Telegram sudah aktif.\n\n";
   salam += "Gunakan perintah /status untuk melihat kondisi infus.";
 
   kirimTelegram(salam);
@@ -345,8 +354,8 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  // WiFiManager dan Telegram
-  setupWiFiManager();
+  // Hubungkan ke WiFi dan Telegram
+  setupWiFi();
 
   // MQTT Server Setup
   mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
