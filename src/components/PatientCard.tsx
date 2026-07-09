@@ -57,9 +57,9 @@ export default function PatientCard({
   const statusBg = isWarning ? "bg-alert-50 text-alert-600" : "bg-safe-50 text-safe-500";
   const glowEffect = isWarning ? "animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]" : "";
 
-  // 1 infusion = 1000ml. Standard macro factor = 20 drops/mL.
-  // Total drops in a bag = 1000 * 20 = 20,000 drops.
-  const totalVolume = 1000; // mL
+  // 1 infusion = 500ml. Standard macro factor = 20 drops/mL.
+  // Total drops in a bag = 500 * 20 = 10,000 drops.
+  const totalVolume = 500; // mL
   const dropFactor = 20; // drops/mL
   
   // Volume infused
@@ -240,7 +240,7 @@ export default function PatientCard({
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Sisa Cairan Infus</div>
                   <div className="flex items-baseline justify-center sm:justify-start gap-1">
                     <span className="text-4xl font-black text-blue-600">{Math.round(remainingVolume)}</span>
-                    <span className="text-lg font-bold text-gray-500">/ 1000 mL</span>
+                    <span className="text-lg font-bold text-gray-500">/ 500 mL</span>
                   </div>
                 </div>
 
