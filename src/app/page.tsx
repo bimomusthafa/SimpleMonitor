@@ -60,6 +60,10 @@ export default function Home() {
     const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
     clientRef.current = client;
 
+    client.on("error", (err) => {
+      console.error("MQTT Connection Error:", err);
+    });
+
     client.on("connect", () => {
       console.log("Connected to HiveMQ MQTT Broker via WebSockets");
       client.subscribe("iv-monitor/device/+/data", (err) => {
