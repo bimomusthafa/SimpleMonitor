@@ -76,6 +76,8 @@ float beratGram = 0;
 volatile unsigned long jumlahTetes = 0;
 volatile unsigned long totalTetesKumulatif = 0; // Menghitung total tetesan kumulatif untuk sisa infus di web
 volatile unsigned long lastDropTime = 0;
+volatile unsigned long lastDropInterval = 0;    // Interval antar tetesan terakhir (ms) untuk realtime flow
+volatile bool dropDetectedFlag = false;         // Flag untuk publish MQTT realtime
 
 // Anti dobel hitung tetesan
 const unsigned long debounceDrop = 120; // ms
@@ -118,9 +120,13 @@ void IRAM_ATTR hitungTetes() {
   unsigned long now = millis();
 
   if (now - lastDropTime > debounceDrop) {
+    if (lastDropTime > 0) {
+      lastDropInterval = now - lastDropTime;
+    }
     jumlahTetes++;
     totalTetesKumulatif++; // Akumulasikan ke hitungan kumulatif
     lastDropTime = now;
+    dropDetectedFlag = true;
   }
 }
 
@@ -500,47 +506,74 @@ void loop() {
   // ================= CEK PESAN TELEGRAM =================
   cekTelegram();
 
-  // ================= KONEKSI DAN PROSES MQTT =================
+  // ================= PROSES REALTIME TETESAN =================
+  if (dropDetectedFlag) {
+    dropDetectedFlag = false;
+
+    // Hitung tetes per menit secara realtime: 60.000 ms / interval (ms)
+    noInterrupts();
+    unsigned long interval = lastDropInterval;
+    interrupts();
+
+    if (interval > 0) {
+      tetesPerMenit = 60000 / interval;
+      // Batasi nilai wajar (maksimal 300 tetes per menit)
+      if (tetesPerMenit > 300) tetesPerMenit = 300;
+    } else {
+      tetesPerMenit = 0;
+    }
+
+    mlPerJam = (tetesPerMenit * 60.0) / dropFactor;
+
+    // Kirim langsung ke MQTT saat tetesan terjadi
+    if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
+      String payload = "{\"flowRate\":" + String(tetesPerMenit) + 
+                       ",\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+      mqttClient.publish(MQTT_TOPIC, payload.c_str());
+      Serial.print("Realtime Publish Tetesan: ");
+      Serial.println(payload);
+    }
+  }
+
+  // ================= TIMEOUT INFUS MACET / SELESAI =================
+  // Jika tidak ada tetesan baru selama lebih dari 10 detik, set flow ke 0 secara realtime
+  if (millis() - lastDropTime > 10000 && tetesPerMenit > 0) {
+    tetesPerMenit = 0;
+    mlPerJam = 0;
+    
+    if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
+      String payload = "{\"flowRate\":0,\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+      mqttClient.publish(MQTT_TOPIC, payload.c_str());
+      Serial.println("Realtime Publish: Infus Terhenti (Timeout 10s)");
+    }
+  }
+
+  // ================= KONEKSI DAN PROSES MQTT (HEARTBEAT 2 DETIK) =================
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqttClient.connected()) {
       reconnectMQTT();
     }
     mqttClient.loop();
 
-    // Kirim data telemetry ke MQTT setiap 2 detik
+    // Kirim data telemetry berkala setiap 2 detik sebagai heartbeat
     if (millis() - lastMQTTPublish >= intervalMQTTPublish) {
       lastMQTTPublish = millis();
 
-      // Format JSON Payload: {"flowRate": tetesPerMenit, "dropsCount": totalTetesKumulatif}
       String payload = "{\"flowRate\":" + String(tetesPerMenit) + 
                        ",\"dropsCount\":" + String(totalTetesKumulatif) + "}";
 
-      Serial.print("Publish ke MQTT: ");
+      Serial.print("Publish Heartbeat ke MQTT: ");
       Serial.println(payload);
 
       mqttClient.publish(MQTT_TOPIC, payload.c_str());
     }
   }
 
-  // ================= HITUNG TETES 30 DETIK =================
+  // ================= REPORT STATS 30 DETIK (LOG MONITOR) =================
   if (millis() - lastHitung >= intervalHitung) {
-    noInterrupts();
-    tetes30Detik = jumlahTetes;
-    jumlahTetes = 0; // reset hitungan mulai dari 0 lagi untuk flow rate
-    interrupts();
-
-    // Karena hitungnya 30 detik, estimasi tetes per menit dikali 2
-    tetesPerMenit = tetes30Detik * 2;
-
-    // Konversi ke mL/jam
-    mlPerJam = (tetesPerMenit * 60.0) / dropFactor;
-
     lastHitung = millis();
 
     Serial.println("==============================");
-    Serial.print("Tetes 30 Detik : ");
-    Serial.println(tetes30Detik);
-
     Serial.print("Tetes / Menit  : ");
     Serial.println(tetesPerMenit);
 
@@ -554,8 +587,7 @@ void loop() {
 
     Serial.print("Status Cairan  : ");
     Serial.println(statusCairan);
-
-    Serial.println("Hitungan tetes direset ke 0");
+    Serial.println("==============================");
   }
 
   // ================= GANTI TAMPILAN LCD SETIAP 5 DETIK =================
