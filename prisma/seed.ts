@@ -38,7 +38,7 @@ async function main() {
           }
         });
       }
-      console.log("Semua data pasien berhasil diimpor ke MySQL!");
+      console.log("Semua data pasien berhasil diimpor ke database!");
     }
   } catch (error) {
     console.error("Gagal mengimpor data awal:", error);
