@@ -10,7 +10,7 @@ export async function GET() {
     });
     return NextResponse.json(patients);
   } catch (error) {
-    console.error("Gagal mengambil data pasien dari MySQL:", error);
+    console.error("Gagal mengambil data pasien dari database:", error);
     // Kembalikan array kosong agar halaman web tidak crash jika database belum di-setup
     return NextResponse.json([]);
   }
