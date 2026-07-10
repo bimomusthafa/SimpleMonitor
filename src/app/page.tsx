@@ -132,8 +132,8 @@ export default function Home() {
         d => d.deviceId.toLowerCase() === p.deviceId.toLowerCase()
       );
       if (data) {
-        const remainingVolume = Math.max(0, 500 - (data.dropsCount / 20));
-        const pct = (remainingVolume / 500) * 100;
+        const remainingVolume = Math.max(0, 555 - (data.dropsCount / 20));
+        const pct = (remainingVolume / 555) * 100;
         
         let threshold = 100;
         if (pct <= 15) {
@@ -247,7 +247,7 @@ export default function Home() {
                           Sisa: {alert.percentage}%
                         </span>
                         <span className="text-[10px] text-gray-400 font-bold">
-                          ({alert.percentage * 5} mL)
+                          ({Math.round(alert.percentage * 5.55)} mL)
                         </span>
                       </div>
                     </div>

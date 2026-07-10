@@ -39,13 +39,19 @@ const unsigned long intervalTelegram = 1500;
 String statusSebelumnya = "AMAN";
 
 // Flags untuk mendeteksi notifikasi berat agar tidak kirim berulang-ulang
-bool notified_250 = false;
-bool notified_150 = false;
+bool notified_500 = false;
+bool notified_400 = false;
+bool notified_300 = false;
+bool notified_200 = false;
 bool notified_100 = false;
 bool notified_50 = false;
 bool notified_10 = false;
 bool notified_5 = false;
 bool notified_0 = false;
+
+// Flag untuk mendeteksi apakah botol baru sudah di-reset
+bool botolBaruResetDone = false;
+bool menungguKonfirmasiReset = false;
 
 // ================= LCD I2C =================
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -188,6 +194,7 @@ void handlePesanTelegram(int jumlahPesanBaru) {
       pesan += "Bot monitoring infus sudah aktif.\n\n";
       pesan += "Perintah yang tersedia:\n";
       pesan += "/status - Melihat kondisi infus\n";
+      pesan += "/reset - Mereset hitungan data infus ke 0\n";
       pesan += "/help - Bantuan perintah\n\n";
       pesan += "Chat ID Anda:\n";
       pesan += chat_id;
@@ -199,11 +206,50 @@ void handlePesanTelegram(int jumlahPesanBaru) {
       bot.sendMessage(chat_id, buatPesanStatus(), "");
     }
 
+    else if (text == "/reset") {
+      menungguKonfirmasiReset = true;
+      String pesan = "Apakah Anda yakin ingin mereset data infus?\n\n";
+      pesan += "👉 Klik /reset_ya untuk MERESET ke 0\n";
+      pesan += "👉 Klik /reset_tidak untuk MEMBATALKAN";
+      bot.sendMessage(chat_id, pesan, "");
+    }
+
+    else if (text == "/reset_ya") {
+      noInterrupts();
+      totalTetesKumulatif = 0;
+      jumlahTetes = 0;
+      interrupts();
+      
+      lastDropInterval = 0;
+      tetesPerMenit = 0;
+      mlPerJam = 0;
+
+      // Reset semua flag notifikasi agar bisa dikirim kembali saat berat berkurang
+      notified_500 = false;
+      notified_400 = false;
+      notified_300 = false;
+      notified_200 = false;
+      notified_100 = false;
+      notified_50 = false;
+      notified_10 = false;
+      notified_5 = false;
+      notified_0 = false;
+
+      menungguKonfirmasiReset = false;
+      bot.sendMessage(chat_id, "✅ Data infus berhasil di-reset. Memulai pemantauan dari awal.\n\n" + buatPesanStatus(), "");
+    }
+
+    else if (text == "/reset_tidak") {
+      menungguKonfirmasiReset = false;
+      bot.sendMessage(chat_id, "❌ Reset dibatalkan. Melanjutkan pemantauan dengan data sebelumnya.\n\n" + buatPesanStatus(), "");
+    }
+
     else if (text == "/help") {
       String pesan = "";
       pesan += "DAFTAR PERINTAH BOT INFUS\n\n";
       pesan += "/start - Memulai bot\n";
       pesan += "/status - Melihat berat cairan, tetesan, flow, dan status cairan\n";
+      pesan += "/reset - Mereset hitungan cairan infus secara manual\n";
       pesan += "/help - Melihat bantuan";
 
       bot.sendMessage(chat_id, pesan, "");
@@ -231,50 +277,6 @@ void cekTelegram() {
 
 // ================= CEK PERUBAHAN STATUS =================
 void cekNotifikasiStatus() {
-  // Reset flags jika botol infus diganti/diisi ulang (berat naik di atas threshold)
-  if (beratGram > 250.0) {
-    notified_250 = false;
-    notified_150 = false;
-    notified_100 = false;
-    notified_50 = false;
-    notified_10 = false;
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 150.0) {
-    notified_150 = false;
-    notified_100 = false;
-    notified_50 = false;
-    notified_10 = false;
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 100.0) {
-    notified_100 = false;
-    notified_50 = false;
-    notified_10 = false;
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 50.0) {
-    notified_50 = false;
-    notified_10 = false;
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 10.0) {
-    notified_10 = false;
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 5.0) {
-    notified_5 = false;
-    notified_0 = false;
-  }
-  else if (beratGram > 0.0) {
-    notified_0 = false;
-  }
-
   // Kirim notifikasi jika berat turun melewati batas
   if (beratGram <= 0.0 && !notified_0) {
     notified_0 = true;
@@ -296,13 +298,21 @@ void cekNotifikasiStatus() {
     notified_100 = true;
     kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 100 gram!\n\n" + buatPesanStatus());
   }
-  else if (beratGram <= 150.0 && beratGram > 100.0 && !notified_150) {
-    notified_150 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 150 gram.\n\n" + buatPesanStatus());
+  else if (beratGram <= 200.0 && beratGram > 100.0 && !notified_200) {
+    notified_200 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 200 gram.\n\n" + buatPesanStatus());
   }
-  else if (beratGram <= 250.0 && beratGram > 150.0 && !notified_250) {
-    notified_250 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 250 gram.\n\n" + buatPesanStatus());
+  else if (beratGram <= 300.0 && beratGram > 200.0 && !notified_300) {
+    notified_300 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 300 gram.\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 400.0 && beratGram > 300.0 && !notified_400) {
+    notified_400 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 400 gram.\n\n" + buatPesanStatus());
+  }
+  else if (beratGram <= 500.0 && beratGram > 400.0 && !notified_500) {
+    notified_500 = true;
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 500 gram.\n\n" + buatPesanStatus());
   }
 }
 
@@ -495,6 +505,24 @@ void loop() {
     if (beratGram < 0) {
       beratGram = 0;
     }
+  }
+
+  // ================= DETEKSI BOTOL BARU =================
+  // Jika berat di atas 500 gram (botol baru 555 mL terpasang) dan reset belum dilakukan
+  if (beratGram > 500.0 && !botolBaruResetDone) {
+    botolBaruResetDone = true;
+    menungguKonfirmasiReset = true;
+    
+    String pesan = "⚠️ Terdeteksi peningkatan berat cairan infus (Kapasitas: 555 mL).\n";
+    pesan += "Apakah Anda mengganti dengan botol baru?\n\n";
+    pesan += "👉 Klik /reset_ya jika YA (mereset data ke 0)\n";
+    pesan += "👉 Klik /reset_tidak jika BUKAN (melanjutkan data sebelumnya)";
+    
+    kirimTelegram(pesan);
+  }
+  // Jika berat turun di bawah 200 gram, persiapkan untuk mendeteksi penggantian botol berikutnya
+  else if (beratGram < 200.0) {
+    botolBaruResetDone = false;
   }
 
   // ================= UPDATE LED WARNING =================
