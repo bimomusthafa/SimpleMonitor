@@ -8,8 +8,8 @@
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
 
-#define WIFI_SSID "SULTAN"
-#define WIFI_PASS "asdf2112"
+#define WIFI_SSID "Altsany"
+#define WIFI_PASS "11111111"
 
 // ================= MQTT CONFIGURATION =================
 #include <PubSubClient.h> // Pastikan library PubSubClient terinstal di Arduino IDE Anda
