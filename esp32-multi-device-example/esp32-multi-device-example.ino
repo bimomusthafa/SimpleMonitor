@@ -7,9 +7,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
-
-#define WIFI_SSID "Altsany"
-#define WIFI_PASS "11111111"
+#include <WiFiManager.h> // Pastikan library WiFiManager oleh tzapu terinstal di Arduino IDE Anda
 
 // ================= MQTT CONFIGURATION =================
 #include <PubSubClient.h> // Pastikan library PubSubClient terinstal di Arduino IDE Anda
@@ -361,22 +359,24 @@ void setupWiFi() {
   lcd.setCursor(0, 0);
   lcd.print("Koneksi WiFi...");
   lcd.setCursor(0, 1);
-  lcd.print(WIFI_SSID);
+  lcd.print("Setup Portal AP");
 
-  Serial.print("Menghubungkan ke WiFi: ");
-  Serial.println(WIFI_SSID);
+  Serial.println("Memulai WiFiManager...");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  // Inisialisasi WiFiManager
+  WiFiManager wm;
 
-  // Batas waktu tunggu koneksi (20 detik)
-  unsigned long startAttemptTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 20000) {
-    delay(500);
-    Serial.print(".");
-  }
+  // Jika ingin mereset WiFi yang tersimpan sebelumnya saat menyalakan ulang alat, 
+  // hilangkan tanda komentar pada baris di bawah:
+  // wm.resetSettings();
 
-  if (WiFi.status() != WL_CONNECTED) {
+  // Menentukan nama Access Point (AP) untuk konfigurasi Wi-Fi. 
+  // Jika ESP32 tidak terhubung ke Wi-Fi lama, dia akan membuat hotspot dengan nama "IV-Monitor-Setup" (Password: 12345678).
+  // Collaborator Anda bisa menghubungkan laptop/HP ke hotspot ini untuk mengatur Wi-Fi baru.
+  bool res = wm.autoConnect("IV-Monitor-Setup", "12345678");
+
+  if (!res) {
+    Serial.println("Gagal terhubung ke Wi-Fi.");
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Gagal");
@@ -393,7 +393,7 @@ void setupWiFi() {
   lcd.print(WiFi.localIP().toString());
   delay(2000);
 
-  Serial.println("\nWiFi Terhubung");
+  Serial.println("\nWiFi Terhubung!");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
@@ -401,7 +401,7 @@ void setupWiFi() {
 
   String salam = "";
   salam += "Assalamu'alaikum.\n";
-  salam += "Sistem monitoring infus berhasil terhubung ke WiFi SULTAN dan bot Telegram sudah aktif.\n\n";
+  salam += "Sistem monitoring infus berhasil terhubung ke WiFi dan bot Telegram sudah aktif.\n\n";
   salam += "Gunakan perintah /status untuk melihat kondisi infus.";
 
   kirimTelegram(salam);
