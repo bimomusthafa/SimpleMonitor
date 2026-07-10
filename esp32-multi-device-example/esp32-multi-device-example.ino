@@ -684,6 +684,13 @@ void loop() {
     Serial.print(" tetes | Berat: ");
     Serial.print(beratGram);
     Serial.print(" gram | Status: ");
-    Serial.println(statusCairan);
+    Serial.print(statusCairan);
+    
+    if (scale.is_ready()) {
+      Serial.print(" | Raw ADC: ");
+      Serial.println(scale.read());
+    } else {
+      Serial.println(" | ⚠️ SENSOR HX711 TIDAK SELESAI/TIDAK SIAP! (Periksa kabel/pin)");
+    }
   }
 }
