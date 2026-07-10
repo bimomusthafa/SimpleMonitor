@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import PatientCard from "@/components/PatientCard";
 import { RefreshCw, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
-import mqtt from "mqtt";
+import type { MqttClient } from "mqtt";
 
 interface Patient {
   id: string;
@@ -39,7 +39,7 @@ export default function Home() {
   const [isFetching, setIsFetching] = useState(true);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
 
-  const clientRef = useRef<mqtt.MqttClient | null>(null);
+  const clientRef = useRef<MqttClient | null>(null);
   const simIntervalsRef = useRef<Record<string, any>>({});
   const simDropsCountRef = useRef<Record<string, number>>({});
 
@@ -56,60 +56,68 @@ export default function Home() {
   useEffect(() => {
     fetchPatients();
 
-    // Connect to HiveMQ Public WebSocket broker
-    const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
-    clientRef.current = client;
+    let activeClient: MqttClient | null = null;
 
-    client.on("error", (err) => {
-      console.error("MQTT Connection Error:", err);
-    });
+    // Connect to HiveMQ Public WebSocket broker dynamically
+    import("mqtt").then((mqttModule) => {
+      const mqtt = mqttModule.default || mqttModule;
+      const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
+      activeClient = client;
+      clientRef.current = client;
 
-    client.on("connect", () => {
-      console.log("Connected to HiveMQ MQTT Broker via WebSockets");
-      client.subscribe("iv-monitor/device/+/data", (err) => {
-        if (err) {
-          console.error("MQTT Subscription failed:", err);
-        } else {
-          console.log("Subscribed to iv-monitor/device/+/data");
+      client.on("error", (err) => {
+        console.error("MQTT Connection Error:", err);
+      });
+
+      client.on("connect", () => {
+        console.log("Connected to HiveMQ MQTT Broker via WebSockets");
+        client.subscribe("iv-monitor/device/+/data", (err) => {
+          if (err) {
+            console.error("MQTT Subscription failed:", err);
+          } else {
+            console.log("Subscribed to iv-monitor/device/+/data");
+          }
+        });
+      });
+
+      client.on("message", (topic, message) => {
+        try {
+          const parts = topic.split("/");
+          const deviceId = parts[2];
+          if (deviceId) {
+            const payload = JSON.parse(message.toString());
+            const flowRate = payload.flowRate || 0;
+            const dropsCount = payload.dropsCount || 0;
+            
+            let status: "normal" | "warning-fast" | "warning-slow" = "normal";
+            if (flowRate > 120) {
+              status = "warning-fast";
+            } else if (flowRate < 10) {
+              status = "warning-slow";
+            }
+
+            setIvData(prev => ({
+              ...prev,
+              [deviceId]: {
+                deviceId,
+                dropsCount,
+                flowRate,
+                status,
+                lastUpdated: new Date().toISOString()
+              }
+            }));
+          }
+        } catch (err) {
+          console.error("Error parsing MQTT message payload:", err);
         }
       });
-    });
-
-    client.on("message", (topic, message) => {
-      try {
-        const parts = topic.split("/");
-        const deviceId = parts[2];
-        if (deviceId) {
-          const payload = JSON.parse(message.toString());
-          const flowRate = payload.flowRate || 0;
-          const dropsCount = payload.dropsCount || 0;
-          
-          let status: "normal" | "warning-fast" | "warning-slow" = "normal";
-          if (flowRate > 120) {
-            status = "warning-fast";
-          } else if (flowRate < 10) {
-            status = "warning-slow";
-          }
-
-          setIvData(prev => ({
-            ...prev,
-            [deviceId]: {
-              deviceId,
-              dropsCount,
-              flowRate,
-              status,
-              lastUpdated: new Date().toISOString()
-            }
-          }));
-        }
-      } catch (err) {
-        console.error("Error parsing MQTT message payload:", err);
-      }
+    }).catch(err => {
+      console.error("Failed to load MQTT library dynamically:", err);
     });
 
     return () => {
-      if (client) {
-        client.end();
+      if (activeClient) {
+        activeClient.end();
       }
       // Clear any active simulation loops on unmount
       Object.values(simIntervalsRef.current).forEach(clearInterval);
