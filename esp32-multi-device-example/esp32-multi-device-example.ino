@@ -161,7 +161,7 @@ String buatPesanStatus() {
   pesan += "Tanggal: " + String(tanggal) + "\n";
   pesan += "Jam: " + String(jam) + "\n\n";
 
-  pesan += "Berat Cairan: " + String(beratGram, 0) + " gram\n";
+  pesan += "Volume Cairan: " + String(beratGram, 0) + " mL\n";
   pesan += "Hitungan Berjalan: " + String(tetesSekarang) + " tetes\n";
   pesan += "Tetes / Menit: " + String(tetesPerMenit) + " tetes/menit\n";
   pesan += "Flow Infus: " + String(mlPerJam, 0) + " mL/jam\n";
@@ -280,39 +280,39 @@ void cekNotifikasiStatus() {
   // Kirim notifikasi jika berat turun melewati batas
   if (beratGram <= 0.0 && !notified_0) {
     notified_0 = true;
-    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus habis total! (0 gram)\n\n" + buatPesanStatus());
+    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus habis total! (0 mL)\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 5.0 && beratGram > 0.0 && !notified_5) {
     notified_5 = true;
-    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus kritis tersisa 5 gram!\n\n" + buatPesanStatus());
+    kirimTelegram("⚠️ PERINGATAN DARURAT: Cairan infus kritis tersisa 5 mL!\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 10.0 && beratGram > 5.0 && !notified_10) {
     notified_10 = true;
-    kirimTelegram("⚠️ PERINGATAN KRITIS: Cairan infus tersisa 10 gram!\n\n" + buatPesanStatus());
+    kirimTelegram("⚠️ PERINGATAN KRITIS: Cairan infus tersisa 10 mL!\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 50.0 && beratGram > 10.0 && !notified_50) {
     notified_50 = true;
-    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 50 gram!\n\n" + buatPesanStatus());
+    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 50 mL!\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 100.0 && beratGram > 50.0 && !notified_100) {
     notified_100 = true;
-    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 100 gram!\n\n" + buatPesanStatus());
+    kirimTelegram("⚠️ PERINGATAN: Cairan infus tersisa 100 mL!\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 200.0 && beratGram > 100.0 && !notified_200) {
     notified_200 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 200 gram.\n\n" + buatPesanStatus());
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 200 mL.\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 300.0 && beratGram > 200.0 && !notified_300) {
     notified_300 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 300 gram.\n\n" + buatPesanStatus());
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 300 mL.\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 400.0 && beratGram > 300.0 && !notified_400) {
     notified_400 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 400 gram.\n\n" + buatPesanStatus());
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 400 mL.\n\n" + buatPesanStatus());
   }
   else if (beratGram <= 500.0 && beratGram > 400.0 && !notified_500) {
     notified_500 = true;
-    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 500 gram.\n\n" + buatPesanStatus());
+    kirimTelegram("ℹ️ INFO: Cairan infus tersisa 500 mL.\n\n" + buatPesanStatus());
   }
 }
 
@@ -609,9 +609,9 @@ void loop() {
     Serial.print(mlPerJam);
     Serial.println(" mL/jam");
 
-    Serial.print("Berat Cairan   : ");
+    Serial.print("Volume Cairan  : ");
     Serial.print(beratGram);
-    Serial.println(" gram");
+    Serial.println(" mL");
 
     Serial.print("Status Cairan  : ");
     Serial.println(statusCairan);
@@ -634,11 +634,11 @@ void loop() {
     interrupts();
 
     if (tampilanUtama) {
-      // Tampilan utama: berat dan tetesan
+      // Tampilan utama: volume dan tetesan
       lcd.setCursor(0, 0);
-      lcd.print("B:");
+      lcd.print("V:");
       lcd.print(beratGram, 0);
-      lcd.print("g ");
+      lcd.print("mL ");
 
       lcd.print("C:");
       lcd.print(tetesSekarang);
@@ -681,16 +681,9 @@ void loop() {
 
     Serial.print("Hitungan berjalan: ");
     Serial.print(tetesSekarang);
-    Serial.print(" tetes | Berat: ");
+    Serial.print(" tetes | Volume: ");
     Serial.print(beratGram);
-    Serial.print(" gram | Status: ");
-    Serial.print(statusCairan);
-    
-    if (scale.is_ready()) {
-      Serial.print(" | Raw ADC: ");
-      Serial.println(scale.read());
-    } else {
-      Serial.println(" | ⚠️ SENSOR HX711 TIDAK SELESAI/TIDAK SIAP! (Periksa kabel/pin)");
-    }
+    Serial.print(" mL | Status: ");
+    Serial.println(statusCairan);
   }
 }
