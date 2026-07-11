@@ -70,7 +70,7 @@ Ds1302 rtc(RTC_RST, RTC_CLK, RTC_DAT);
 HX711 scale;
 
 // GANTI NILAI INI SETELAH KALIBRASI LOAD CELL
-float calibration_factor = -7050.0;
+float calibration_factor = -1016.2;
 
 float beratGram = 0;
 
