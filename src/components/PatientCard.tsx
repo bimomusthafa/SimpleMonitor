@@ -19,6 +19,7 @@ interface PatientCardProps {
   room: string;
   flowRate: number;
   dropsCount: number;
+  weight?: number;
   status: "normal" | "warning-fast" | "warning-slow";
   illness?: string;
   condition?: string;
@@ -31,6 +32,7 @@ export default function PatientCard({
   room,
   flowRate,
   dropsCount,
+  weight,
   status,
   illness = "Tidak ditentukan",
   condition = "Stabil",
@@ -64,8 +66,8 @@ export default function PatientCard({
   
   // Volume infused
   const infusedVolume = dropsCount / dropFactor;
-  // Remaining volume
-  const remainingVolume = Math.max(0, totalVolume - infusedVolume);
+  // Remaining volume (use weight from load cell if available, else fallback to drop calculation)
+  const remainingVolume = weight !== undefined ? Math.max(0, weight) : Math.max(0, totalVolume - infusedVolume);
   // Remaining percentage
   const remainingPercentage = (remainingVolume / totalVolume) * 100;
 

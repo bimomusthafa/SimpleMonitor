@@ -556,7 +556,8 @@ void loop() {
     // Kirim langsung ke MQTT saat tetesan terjadi
     if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
       String payload = "{\"flowRate\":" + String(tetesPerMenit) + 
-                       ",\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+                       ",\"dropsCount\":" + String(totalTetesKumulatif) + 
+                       ",\"weight\":" + String(beratGram, 1) + "}";
       mqttClient.publish(MQTT_TOPIC, payload.c_str());
       Serial.print("Realtime Publish Tetesan: ");
       Serial.println(payload);
@@ -570,7 +571,8 @@ void loop() {
     mlPerJam = 0;
     
     if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
-      String payload = "{\"flowRate\":0,\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+      String payload = "{\"flowRate\":0,\"dropsCount\":" + String(totalTetesKumulatif) + 
+                       ",\"weight\":" + String(beratGram, 1) + "}";
       mqttClient.publish(MQTT_TOPIC, payload.c_str());
       Serial.println("Realtime Publish: Infus Terhenti (Timeout 10s)");
     }
@@ -588,7 +590,8 @@ void loop() {
       lastMQTTPublish = millis();
 
       String payload = "{\"flowRate\":" + String(tetesPerMenit) + 
-                       ",\"dropsCount\":" + String(totalTetesKumulatif) + "}";
+                       ",\"dropsCount\":" + String(totalTetesKumulatif) + 
+                       ",\"weight\":" + String(beratGram, 1) + "}";
 
       Serial.print("Publish Heartbeat ke MQTT: ");
       Serial.println(payload);

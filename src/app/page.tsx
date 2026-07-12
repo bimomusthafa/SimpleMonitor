@@ -23,6 +23,7 @@ interface InfusionData {
   flowRate: number;
   status: "normal" | "warning-fast" | "warning-slow";
   lastUpdated: string;
+  weight?: number;
 }
 
 interface AlertData {
@@ -88,6 +89,7 @@ export default function Home() {
             const payload = JSON.parse(message.toString());
             const flowRate = payload.flowRate || 0;
             const dropsCount = payload.dropsCount || 0;
+            const weight = payload.weight !== undefined ? payload.weight : undefined;
             
             let status: "normal" | "warning-fast" | "warning-slow" = "normal";
             if (flowRate > 120) {
@@ -103,7 +105,8 @@ export default function Home() {
                 dropsCount,
                 flowRate,
                 status,
-                lastUpdated: new Date().toISOString()
+                lastUpdated: new Date().toISOString(),
+                weight
               }
             }));
           }
@@ -183,9 +186,11 @@ export default function Home() {
 
         simDropsCountRef.current[targetDeviceId] += addedDrops;
 
+        const remainingVolume = Math.max(0, 555 - (simDropsCountRef.current[targetDeviceId] / 20));
         const payload = {
           flowRate: rate,
-          dropsCount: simDropsCountRef.current[targetDeviceId]
+          dropsCount: simDropsCountRef.current[targetDeviceId],
+          weight: Math.round(remainingVolume * 10) / 10
         };
 
         clientRef.current.publish(
@@ -274,17 +279,18 @@ export default function Home() {
                <div key={p.id} className="flex flex-col gap-3">
                  {/* The Patient Card */}
                  {data && (new Date().getTime() - new Date(data.lastUpdated).getTime() < 7000) ? (
-                   <PatientCard 
-                     patientName={p.name}
-                     room={p.room}
-                     deviceId={p.deviceId}
-                     flowRate={data.flowRate}
-                     dropsCount={data.dropsCount}
-                     status={data.status}
-                     illness={p.illness}
-                     condition={p.condition}
-                     createdAt={p.createdAt}
-                   />
+                    <PatientCard 
+                      patientName={p.name}
+                      room={p.room}
+                      deviceId={p.deviceId}
+                      flowRate={data.flowRate}
+                      dropsCount={data.dropsCount}
+                      weight={data.weight}
+                      status={data.status}
+                      illness={p.illness}
+                      condition={p.condition}
+                      createdAt={p.createdAt}
+                    />
                  ) : (
                    <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 p-8 flex flex-col items-center justify-center text-gray-400 h-[280px]">
                      <RefreshCw className="animate-spin mb-4" size={32} />
